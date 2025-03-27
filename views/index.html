@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система учета клиентов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #scanner-container {
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+        }
+        #preview {
+            width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Система учета клиентов</h1>
+
+    <div class="section">
+        <h2>Добавить нового клиента</h2>
+        <form id="add-client-form">
+            <input type="text" id="client-name" placeholder="Имя клиента" required>
+            <button type="submit">Добавить</button>
+        </form>
+        <div id="client-code-result"></div>
+        <div id="qrCodeContainer" style="margin-top: 20px; text-align: center;">
+            <img id="qrImage" style="display: none; max-width: 200px;">
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Сканировать код клиента</h2>
+        <div id="scanner-container">
+            <video id="preview"></video>
+        </div>
+        <button id="start-scanner">Начать сканирование</button>
+        <div id="client-info"></div>
+    </div>
+
+    <script src="/js/jsQR.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
