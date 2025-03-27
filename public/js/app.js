@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     const addClientForm = document.getElementById('add-client-form');
-    const clientNameInput = document.getElementById('client-name');
+    const clientNameInput = document.getElementById('clientName');
+    const productInput = document.getElementById('product');
+    const priceInput = document.getElementById('price');
     const clientCodeResult = document.getElementById('client-code-result');
     const startScannerBtn = document.getElementById('start-scanner');
     const preview = document.getElementById('preview');
@@ -14,8 +16,10 @@ document.addEventListener('DOMContentLoaded', function() {
     addClientForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         const name = clientNameInput.value.trim();
+        const product = productInput.value.trim();
+        const price = parseFloat(priceInput.value);
         
-        if (!name) return;
+        if (!name || !product || isNaN(price)) return;
 
         try {
             const response = await fetch('/add-client', {
@@ -23,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name })
+                body: JSON.stringify({ name, product, price })
             });
 
             const data = await response.json();
@@ -32,11 +36,18 @@ document.addEventListener('DOMContentLoaded', function() {
             qrImage.style.display = 'block';
             
             clientCodeResult.innerHTML = `
-                <p>Клиент добавлен!</p>
-                <p>Код клиента: <strong>${data.code}</strong></p>
-                <p>Сохраните этот код или QR-код ниже для идентификации клиента.</p>
+                <div class="alert alert-success">
+                    <h4>Клиент добавлен!</h4>
+                    <p>Имя: <strong>${name}</strong></p>
+                    <p>Товар: <strong>${product}</strong></p>
+                    <p>Стоимость: <strong>${price.toFixed(2)} ₽</strong></p>
+                    <p>Код клиента: <strong>${data.code}</strong></p>
+                    <p class="mt-2">Сохраните этот код или QR-код для идентификации клиента.</p>
+                </div>
             `;
             clientNameInput.value = '';
+            productInput.value = '';
+            priceInput.value = '';
         } catch (error) {
             console.error('Error:', error);
             clientCodeResult.innerHTML = '<p>Ошибка при добавлении клиента</p>';
@@ -106,9 +117,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 clientInfo.innerHTML = `<p>Клиент не найден</p>`;
             } else {
                 clientInfo.innerHTML = `
-                    <p>Клиент: <strong>${data.name}</strong></p>
-                    <p>Количество посещений: <strong>${data.visits}</strong></p>
-                    <p>Код: <strong>${code}</strong></p>
+                    <div class="alert alert-info">
+                        <h4>Информация о клиенте</h4>
+                        <p>Клиент: <strong>${data.name}</strong></p>
+                        <p>Товар: <strong>${data.product}</strong></p>
+                        <p>Стоимость: <strong>${data.price} ₽</strong></p>
+                        <p>Заработок: <strong>${data.profit} ₽</strong></p>
+                        <p>Посещений: <strong>${data.visits}</strong></p>
+                        <p>Код: <strong>${code}</strong></p>
+                    </div>
                 `;
             }
         } catch (error) {
