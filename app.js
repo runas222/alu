@@ -21,17 +21,27 @@ db.serialize(() => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             code TEXT UNIQUE,
             name TEXT,
-            product TEXT,
-            price REAL,
-            profit REAL,
             visits INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             qr_image TEXT
         )
     `);
-    // Создаем индекс для ускорения поиска по коду клиента
+    
+    db.run(`
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER,
+            name TEXT,
+            price REAL,
+            profit REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE CASCADE
+        )
+    `);
+    
+    // Создаем индексы
     db.run('CREATE INDEX IF NOT EXISTS idx_clients_code ON clients(code)');
-    db.run('CREATE INDEX IF NOT EXISTS idx_clients_product ON clients(product)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_products_client ON products(client_id)');
 });
 
 app.use(bodyParser.json());
@@ -49,30 +59,96 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// Маршрут для добавления клиента
+// Маршрут для добавления клиента/товара
 app.post('/add-client', async (req, res) => {
     const { name, product, price } = req.body;
     
     if (!name || !product || !price) {
-        console.error('Попытка добавления клиента без имени');
-        return res.status(400).json({ error: 'Имя клиента обязательно' });
+        return res.status(400).json({ error: 'Все поля обязательны' });
     }
 
-    const code = generateClientCode();
-    const qrImage = await QRCode.toDataURL(code);
-
-    const profit = price * 0.1; // 10% от стоимости
+    const profit = price * 0.1;
     
+    db.get('SELECT id, code, qr_image FROM clients WHERE name = ?', [name], async (err, client) => {
+        if (err) {
+            console.error('Ошибка при проверке клиента:', err);
+            return res.status(500).json({ error: 'Ошибка базы данных' });
+        }
+
+        if (client) {
+            // Добавляем товар к существующему клиенту
+            db.run(
+                'INSERT INTO products (client_id, name, price, profit) VALUES (?, ?, ?, ?)',
+                [client.id, product, price, profit],
+                function(err) {
+                    if (err) {
+                        console.error('Ошибка при добавлении товара:', err);
+                        return res.status(500).json({ error: 'Ошибка базы данных' });
+                    }
+                    console.log(`Добавлен товар для клиента: ${name}`);
+                    res.json({ 
+                        code: client.code,
+                        qrImage: client.qr_image,
+                        existing: true
+                    });
+                }
+            );
+        } else {
+            // Создаем нового клиента с первым товаром
+            const code = generateClientCode();
+            const qrImage = await QRCode.toDataURL(code);
+            
+            db.serialize(() => {
+                db.run(
+                    'INSERT INTO clients (code, name, qr_image) VALUES (?, ?, ?)',
+                    [code, name, qrImage],
+                    function(err) {
+                        if (err) {
+                            console.error('Ошибка при добавлении клиента:', err);
+                            return res.status(500).json({ error: 'Ошибка базы данных' });
+                        }
+                        
+                        const clientId = this.lastID;
+                        db.run(
+                            'INSERT INTO products (client_id, name, price, profit) VALUES (?, ?, ?, ?)',
+                            [clientId, product, price, profit],
+                            function(err) {
+                                if (err) {
+                                    console.error('Ошибка при добавлении товара:', err);
+                                    return res.status(500).json({ error: 'Ошибка базы данных' });
+                                }
+                                console.log(`Добавлен новый клиент: ${name} (${code}) с товаром`);
+                                res.json({ code, qrImage });
+                            }
+                        );
+                    }
+                );
+            });
+        }
+    });
+});
+
+// Маршрут для удаления товара
+app.post('/remove-product', (req, res) => {
+    const { clientCode, productId } = req.body;
+    
+    if (!clientCode || !productId) {
+        return res.status(400).json({ error: 'Не указан код клиента или ID товара' });
+    }
+
     db.run(
-        'INSERT INTO clients (code, name, product, price, profit, qr_image) VALUES (?, ?, ?, ?, ?, ?)',
-        [code, name, product, price, profit, qrImage],
+        'DELETE FROM products WHERE id = ? AND client_id = (SELECT id FROM clients WHERE code = ?)',
+        [productId, clientCode],
         function(err) {
             if (err) {
-                console.error('Ошибка при добавлении клиента:', err);
+                console.error('Ошибка при удалении товара:', err);
                 return res.status(500).json({ error: 'Ошибка базы данных' });
             }
-            console.log(`Добавлен новый клиент: ${name} (${code})`);
-            res.json({ code, qrImage });
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Товар не найден' });
+            }
+            console.log(`Удален товар ID: ${productId} для клиента: ${clientCode}`);
+            res.json({ success: true });
         }
     );
 });
@@ -82,47 +158,88 @@ app.get('/check-client/:code', (req, res) => {
     const { code } = req.params;
 
     db.get(
-        'SELECT name, product, price, profit, visits FROM clients WHERE code = ?',
+        'SELECT id, name, visits FROM clients WHERE code = ?',
         [code],
-        (err, row) => {
-            if (err || !row) {
+        (err, client) => {
+            if (err || !client) {
                 console.error('Клиент не найден:', code);
                 return res.json({ error: 'Клиент не найден' });
             }
 
-            // Увеличиваем счетчик посещений
-            db.run(
-                'UPDATE clients SET visits = visits + 1 WHERE code = ?',
-                [code],
-                (err) => {
+            // Получаем все товары клиента
+            db.all(
+                'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                [client.id],
+                (err, products) => {
                     if (err) {
-                        console.error('Ошибка при обновлении счетчика посещений:', err);
+                        console.error('Ошибка при получении товаров:', err);
+                        return res.status(500).json({ error: 'Ошибка базы данных' });
                     }
+
+                    // Увеличиваем счетчик посещений
+                    db.run(
+                        'UPDATE clients SET visits = visits + 1 WHERE id = ?',
+                        [client.id],
+                        (err) => {
+                            if (err) {
+                                console.error('Ошибка при обновлении счетчика посещений:', err);
+                            }
+                        }
+                    );
+
+                    console.log(`Проверен клиент: ${client.name} (${code}), посещений: ${client.visits + 1}`);
+                    res.json({
+                        name: client.name,
+                        products: products,
+                        visits: client.visits + 1
+                    });
                 }
             );
-
-            console.log(`Проверен клиент: ${row.name} (${code}), посещений: ${row.visits + 1}`);
-            res.json({
-                name: row.name,
-                product: row.product,
-                price: row.price,
-                profit: row.profit,
-                visits: row.visits + 1
-            });
         }
     );
 });
 
 // Маршрут для получения списка клиентов
 app.get('/clients', (req, res) => {
-    db.all('SELECT id, code, name, product, price, profit, visits, created_at FROM clients ORDER BY created_at DESC', 
-        (err, rows) => {
+    db.all('SELECT id, code, name, visits, created_at FROM clients ORDER BY created_at DESC', 
+        (err, clients) => {
             if (err) {
                 console.error('Ошибка при получении списка клиентов:', err);
                 return res.status(500).json({ error: 'Ошибка базы данных' });
             }
-            console.log('Запрошен список клиентов, найдено:', rows.length);
-            res.json(rows);
+
+            // Для каждого клиента получаем его товары
+            const clientsWithProducts = [];
+            let processed = 0;
+            
+            if (clients.length === 0) {
+                console.log('Запрошен список клиентов, найдено: 0');
+                return res.json([]);
+            }
+
+            clients.forEach(client => {
+                db.all(
+                    'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                    [client.id],
+                    (err, products) => {
+                        if (err) {
+                            console.error('Ошибка при получении товаров:', err);
+                            return res.status(500).json({ error: 'Ошибка базы данных' });
+                        }
+
+                        clientsWithProducts.push({
+                            ...client,
+                            products: products
+                        });
+
+                        processed++;
+                        if (processed === clients.length) {
+                            console.log('Запрошен список клиентов, найдено:', clientsWithProducts.length);
+                            res.json(clientsWithProducts);
+                        }
+                    }
+                );
+            });
         }
     );
 });

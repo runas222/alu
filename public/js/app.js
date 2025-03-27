@@ -116,13 +116,43 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.error) {
                 clientInfo.innerHTML = `<p>Клиент не найден</p>`;
             } else {
+                // Рассчитываем общую сумму и заработок
+                let totalPrice = 0;
+                let totalProfit = 0;
+                
+                // Сортируем товары по цене (от большего к меньшему)
+                const sortedProducts = [...data.products].sort((a, b) => b.price - a.price);
+                
+                const productsHtml = sortedProducts.map(product => {
+                    totalPrice += product.price;
+                    totalProfit += product.profit;
+                    return `
+                        <div class="product-item mb-3 p-3 border rounded">
+                            <h5 class="mb-2">${product.name}</h5>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p><span class="text-muted">Цена:</span> <strong>${product.price.toFixed(2)} ₽</strong></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p><span class="text-muted">Заработок:</span> <strong>${product.profit.toFixed(2)} ₽</strong></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p><span class="text-muted">Дата:</span> <strong>${product.created_at ? new Date(product.created_at).toLocaleDateString('ru-RU') : 'Не указана'}</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
                 clientInfo.innerHTML = `
                     <div class="alert alert-info">
                         <h4>Информация о клиенте</h4>
                         <p>Клиент: <strong>${data.name}</strong></p>
-                        <p>Товар: <strong>${data.product}</strong></p>
-                        <p>Стоимость: <strong>${data.price} ₽</strong></p>
-                        <p>Заработок: <strong>${data.profit} ₽</strong></p>
+                        ${productsHtml}
+                        <div class="totals">
+                            <p>Общая стоимость: <strong>${totalPrice.toFixed(2)} ₽</strong></p>
+                            <p>Общий заработок: <strong>${totalProfit.toFixed(2)} ₽</strong></p>
+                        </div>
                         <p>Посещений: <strong>${data.visits}</strong></p>
                         <p>Код: <strong>${code}</strong></p>
                     </div>
