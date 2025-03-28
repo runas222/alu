@@ -168,7 +168,7 @@ app.get('/check-client/:code', (req, res) => {
 
             // Получаем все товары клиента
             db.all(
-                'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ? ORDER BY created_at DESC',
                 [client.id],
                 (err, products) => {
                     if (err) {
@@ -246,8 +246,11 @@ app.get('/clients', (req, res) => {
 
 // Старт сервера
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+    console.log('Сервер запущен:');
+    console.log(`- Локальный: http://localhost:${PORT}`);
+    console.log(`- Сеть: http://${require('os').networkInterfaces().en0?.[1]?.address || 'localhost'}:${PORT}`);
 });
 
 // Закрытие соединения с БД при завершении
