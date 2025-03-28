@@ -22,7 +22,7 @@ db.serialize(() => {
             code TEXT UNIQUE,
             name TEXT,
             visits INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
             qr_image TEXT
         )
     `);
@@ -34,7 +34,7 @@ db.serialize(() => {
             name TEXT,
             price REAL,
             profit REAL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE CASCADE
         )
     `);
@@ -201,7 +201,7 @@ app.get('/check-client/:code', (req, res) => {
 
 // Маршрут для получения списка клиентов
 app.get('/clients', (req, res) => {
-    db.all('SELECT id, code, name, visits, created_at FROM clients ORDER BY created_at DESC', 
+    db.all('SELECT id, code, name, visits, strftime("%Y-%m-%dT%H:%M:%S", created_at) as created_at FROM clients ORDER BY created_at DESC', 
         (err, clients) => {
             if (err) {
                 console.error('Ошибка при получении списка клиентов:', err);
@@ -219,7 +219,7 @@ app.get('/clients', (req, res) => {
 
             clients.forEach(client => {
                 db.all(
-                    'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                    'SELECT id, name, price, profit, strftime("%Y-%m-%dT%H:%M:%S", created_at) as created_at FROM products WHERE client_id = ?',
                     [client.id],
                     (err, products) => {
                         if (err) {
