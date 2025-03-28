@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Инициализация сканера
-    // Detect platform
+    // Detect iOS platform
     function isIOS() {
         return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -98,22 +98,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 video: {
                     facingMode: "environment",
                     ...(isIOS() ? {
-                        // iOS constraints
+                        // iOS-specific constraints
                         width: { min: 640, ideal: 1280, max: 1920 },
                         height: { min: 480, ideal: 720, max: 1080 },
                         frameRate: { min: 15, ideal: 30, max: 60 },
                         aspectRatio: { ideal: 1.777777778 } // 16:9
                     } : isAndroid() ? {
-                        // Android constraints
+                        // Android-specific constraints
                         width: { min: 640, ideal: 1280, max: 1920 },
                         height: { min: 480, ideal: 720, max: 1080 },
                         frameRate: { min: 15, ideal: 30, max: 60 },
                         aspectRatio: { ideal: 1.777777778 }
                     } : {
                         // Default constraints for other platforms
-                        width: { min: 640, ideal: 1280, max: 1920 },
-                        height: { min: 480, ideal: 720, max: 1080 },
-                        frameRate: { min: 15, ideal: 30, max: 60 }
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 60 }
                     })
                 }
             };
@@ -140,9 +140,18 @@ document.addEventListener('DOMContentLoaded', function() {
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
+            let errorMessage = `Ошибка доступа к камере: ${err.message}`;
+            
+            if (isAndroid()) {
+                errorMessage += '<br><br>Для Android устройств:';
+                errorMessage += '<br>1. Убедитесь что разрешили доступ к камере';
+                errorMessage += '<br>2. Попробуйте использовать Chrome браузер';
+                errorMessage += '<br>3. Проверьте что камера не используется другим приложением';
+            }
+            
             clientInfo.innerHTML = `
                 <div class="alert alert-danger">
-                    <p>Ошибка доступа к камере: ${err.message}</p>
+                    <p>${errorMessage}</p>
                     <p>Попробуйте обновить страницу и разрешить доступ к камере</p>
                 </div>
             `;
@@ -164,46 +173,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function scanFrame() {
         if (!scanning) return;
 
-        try {
-            if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
-                const canvas = document.createElement('canvas');
-                // Scale down for better performance on mobile
-                const scale = isAndroid() || isIOS() ? 0.5 : 1;
-                canvas.width = preview.videoWidth * scale;
-                canvas.height = preview.videoHeight * scale;
-                
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
-                
-                // Convert to grayscale for better QR detection
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const grayscaleData = new Uint8ClampedArray(imageData.data.length / 4);
-                
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    grayscaleData[i/4] = (
-                        imageData.data[i] * 0.3 + 
-                        imageData.data[i+1] * 0.59 + 
-                        imageData.data[i+2] * 0.11
-                    );
-                }
+        if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
+            const canvas = document.createElement('canvas');
+            canvas.width = preview.videoWidth;
+            canvas.height = preview.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-                const code = jsQR(
-                    grayscaleData, 
-                    imageData.width, 
-                    imageData.height,
-                    {
-                        inversionAttempts: 'dontInvert',
-                        canOverwriteImage: false
-                    }
-                );
-
-                if (code) {
-                    checkClient(code.data);
-                    stopScanner();
-                }
+            if (code) {
+                checkClient(code.data);
+                stopScanner();
             }
-        } catch (e) {
-            console.error('Scan error:', e);
         }
 
         animationFrame = requestAnimationFrame(scanFrame);
