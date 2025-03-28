@@ -55,6 +55,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Инициализация сканера
+    // Detect iOS platform
+    function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
     startScannerBtn.addEventListener('click', async function() {
         if (scanning) {
             stopScanner();
@@ -62,20 +68,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            // iOS Safari requires specific handling
             const constraints = {
                 video: {
                     facingMode: "environment",
-                    // iOS-specific constraints
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
+                    ...(isIOS() ? {
+                        // iOS-specific constraints
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    } : {
+                        // Default constraints for other platforms
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 60 }
+                    })
                 }
             };
 
-            // Ensure video element is ready
-            preview.setAttribute('playsinline', '');
-            preview.setAttribute('webkit-playsinline', '');
+            // iOS-specific video element setup
+            if (isIOS()) {
+                preview.setAttribute('playsinline', '');
+                preview.setAttribute('webkit-playsinline', '');
+            }
 
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             preview.srcObject = stream;
@@ -146,10 +160,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 let totalPrice = 0;
                 let totalProfit = 0;
                 
-                // Сортируем товары по дате (новые сверху)
-                const sortedProducts = [...data.products].sort((a, b) => 
-                    new Date(b.created_at) - new Date(a.created_at)
-                );
+                // Сортируем товары по дате (новые сверху) с унифицированным парсингом даты
+                const sortedProducts = [...data.products].sort((a, b) => {
+                    const dateA = new Date(parseDateString(a.created_at)).getTime();
+                    const dateB = new Date(parseDateString(b.created_at)).getTime();
+                    return dateB - dateA;
+                });
                 
                 const productsHtml = sortedProducts.map(product => {
                     totalPrice += product.price;
@@ -190,6 +206,24 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error:', error);
             clientInfo.innerHTML = '<p>Ошибка при проверке клиента</p>';
         }
+    }
+
+    // Parse date string consistently across platforms
+    function parseDateString(dateString) {
+        if (!dateString) return null;
+        
+        // Handle ISO format
+        if (dateString.includes('T')) {
+            return dateString;
+        }
+
+        // Handle other common formats
+        const parts = dateString.split(/[- :/]/);
+        if (parts.length >= 3) {
+            // Assume YYYY-MM-DD or similar
+            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+        return dateString;
     }
 
     // Helper function to handle date parsing across browsers
