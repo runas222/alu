@@ -77,10 +77,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         height: { ideal: 720 },
                         frameRate: { ideal: 30 }
                     } : {
-                        // Default constraints for other platforms
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        frameRate: { ideal: 60 }
+                        // More flexible constraints for Android
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        frameRate: { min: 15, ideal: 30, max: 60 },
+                        aspectRatio: { ideal: 1.7777777778 } // 16:9
                     })
                 }
             };
@@ -129,19 +130,30 @@ document.addEventListener('DOMContentLoaded', function() {
     function scanFrame() {
         if (!scanning) return;
 
-        if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
-            const canvas = document.createElement('canvas');
-            canvas.width = preview.videoWidth;
-            canvas.height = preview.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
+        try {
+            if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
+                const canvas = document.createElement('canvas');
+                // Scale down for better performance on mobile
+                const scale = isIOS() ? 1 : 0.7;
+                canvas.width = preview.videoWidth * scale;
+                canvas.height = preview.videoHeight * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, canvas.height, {
+                    inversionAttempts: 'dontInvert',
+                    canOverwriteImage: false
+                });
 
-            if (code) {
-                checkClient(code.data);
-                stopScanner();
+                if (code) {
+                    console.log('QR detected:', code.data);
+                    checkClient(code.data);
+                    stopScanner();
+                    return;
+                }
             }
+        } catch (err) {
+            console.error('Scan error:', err);
         }
 
         animationFrame = requestAnimationFrame(scanFrame);
