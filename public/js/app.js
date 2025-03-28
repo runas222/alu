@@ -62,15 +62,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            // iOS Safari requires specific handling
+            const constraints = {
+                video: {
+                    facingMode: "environment",
+                    // iOS-specific constraints
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                }
+            };
+
+            // Ensure video element is ready
+            preview.setAttribute('playsinline', '');
+            preview.setAttribute('webkit-playsinline', '');
+
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
             preview.srcObject = stream;
+            
+            // Wait for video to be ready
+            await new Promise((resolve) => {
+                preview.onloadedmetadata = resolve;
+            });
+            
             preview.play();
             scanning = true;
             startScannerBtn.textContent = 'Остановить сканирование';
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
-            clientInfo.innerHTML = '<p>Ошибка доступа к камере</p>';
+            clientInfo.innerHTML = `
+                <div class="alert alert-danger">
+                    <p>Ошибка доступа к камере: ${err.message}</p>
+                    <p>Попробуйте обновить страницу и разрешить доступ к камере</p>
+                </div>
+            `;
         }
     });
 
@@ -139,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <p><span class="text-muted">Заработок:</span> <strong>${product.profit.toFixed(2)} ₽</strong></p>
                                 </div>
                                 <div class="col-md-4">
-                                    <p><span class="text-muted">Дата:</span> <strong>${product.created_at ? new Date(product.created_at).toLocaleDateString('ru-RU') : 'Не указана'}</strong></p>
+                                    <p><span class="text-muted">Дата:</span> <strong>${product.created_at ? formatDateForDisplay(product.created_at) : 'Не указана'}</strong></p>
                                 </div>
                             </div>
                         </div>
@@ -163,6 +189,25 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error:', error);
             clientInfo.innerHTML = '<p>Ошибка при проверке клиента</p>';
+        }
+    }
+
+    // Helper function to handle date parsing across browsers
+    function formatDateForDisplay(dateString) {
+        try {
+            // Handle ISO date strings and potential iOS quirks
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                // Try parsing as non-ISO format if needed
+                const parts = dateString.split(/[- :T]/);
+                const fixedDate = new Date(parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]);
+                return !isNaN(fixedDate.getTime()) ? 
+                    fixedDate.toLocaleDateString('ru-RU') : 
+                    'Неверный формат даты';
+            }
+            return date.toLocaleDateString('ru-RU');
+        } catch (e) {
+            return 'Ошибка даты';
         }
     }
 });
