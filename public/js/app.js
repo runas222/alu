@@ -1,4 +1,22 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Download loyalty card as image
+    document.getElementById('downloadCardBtn')?.addEventListener('click', function() {
+        const card = document.querySelector('.loyalty-card');
+        if (!card) return;
+
+        html2canvas(card, {
+            scale: 2,
+            backgroundColor: null,
+            logging: false,
+            useCORS: true
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'loyalty-card.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    });
+
     const addClientForm = document.getElementById('add-client-form');
     const clientNameInput = document.getElementById('clientName');
     const productInput = document.getElementById('product');
@@ -31,9 +49,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             const data = await response.json();
+            const qrCodeContainer = document.getElementById('qrCodeContainer');
             const qrImage = document.getElementById('qrImage');
+            const cardHolder = document.querySelector('.card-holder');
+            
             qrImage.src = data.qrImage;
-            qrImage.style.display = 'block';
+            qrCodeContainer.style.display = 'block';
+            cardHolder.textContent = name;
             
             clientCodeResult.innerHTML = `
                 <div class="alert alert-success">
@@ -72,10 +94,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 video: {
                     facingMode: "environment",
                     ...(isIOS() ? {
-                        // iOS-specific constraints
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 }
+                        // More reliable iOS constraints
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        frameRate: { min: 15, ideal: 30, max: 60 },
+                        aspectRatio: { ideal: 1.777777778 } // 16:9
                     } : {
                         // Default constraints for other platforms
                         width: { ideal: 1920 },
@@ -87,8 +110,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // iOS-specific video element setup
             if (isIOS()) {
-                preview.setAttribute('playsinline', '');
-                preview.setAttribute('webkit-playsinline', '');
+                preview.setAttribute('playsinline', 'true');
+                preview.setAttribute('webkit-playsinline', 'true');
+                preview.setAttribute('muted', 'true');
+                preview.setAttribute('autoplay', 'true');
             }
 
             stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -212,16 +237,29 @@ document.addEventListener('DOMContentLoaded', function() {
     function parseDateString(dateString) {
         if (!dateString) return null;
         
-        // Handle ISO format
+        // Handle ISO format (2025-03-28T15:51:38Z)
         if (dateString.includes('T')) {
             return dateString;
         }
 
-        // Handle other common formats
-        const parts = dateString.split(/[- :/]/);
-        if (parts.length >= 3) {
-            // Assume YYYY-MM-DD or similar
-            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        // Handle common formats:
+        // 1. YYYY-MM-DD HH:MM:SS
+        // 2. DD.MM.YYYY HH:MM:SS
+        // 3. MM/DD/YYYY HH:MM:SS
+        const dateParts = dateString.split(/[- :./]/);
+        
+        if (dateParts.length >= 3) {
+            // Try to determine format based on first part
+            if (dateParts[0].length === 4) {
+                // YYYY-MM-DD format
+                return `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+            } else if (dateParts[1].length === 4) {
+                // DD-MM-YYYY format
+                return `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+            } else {
+                // MM-DD-YYYY format
+                return `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+            }
         }
         return dateString;
     }
@@ -229,17 +267,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper function to handle date parsing across browsers
     function formatDateForDisplay(dateString) {
         try {
-            // Handle ISO date strings and potential iOS quirks
-            const date = new Date(dateString);
+            // First try standard Date parsing
+            let date = new Date(dateString);
+            
+            // If invalid, try parsing with different formats
             if (isNaN(date.getTime())) {
-                // Try parsing as non-ISO format if needed
-                const parts = dateString.split(/[- :T]/);
-                const fixedDate = new Date(parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]);
-                return !isNaN(fixedDate.getTime()) ? 
-                    fixedDate.toLocaleDateString('ru-RU') : 
-                    'Неверный формат даты';
+                const parsedDate = parseDateString(dateString);
+                date = new Date(parsedDate);
+                
+                if (isNaN(date.getTime())) {
+                    return 'Неверный формат даты';
+                }
             }
-            return date.toLocaleDateString('ru-RU');
+            
+            // Format for Russian locale
+            return date.toLocaleDateString('ru-RU', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
         } catch (e) {
             return 'Ошибка даты';
         }
