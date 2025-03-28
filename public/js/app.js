@@ -67,16 +67,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Check and handle iOS permissions
-        if (isIOS()) {
-            const hasPermission = localStorage.getItem('cameraPermissionGranted');
-            if (!hasPermission) {
-                const permissionResult = await showPermissionDialog();
-                if (!permissionResult) return;
-                localStorage.setItem('cameraPermissionGranted', 'true');
-            }
-        }
-
         try {
             const constraints = {
                 video: {
@@ -87,11 +77,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         height: { ideal: 720 },
                         frameRate: { ideal: 30 }
                     } : {
-                        // More flexible constraints for Android
-                        width: { min: 640, ideal: 1280, max: 1920 },
-                        height: { min: 480, ideal: 720, max: 1080 },
-                        frameRate: { min: 15, ideal: 30, max: 60 },
-                        aspectRatio: { ideal: 1.7777777778 } // 16:9
+                        // Default constraints for other platforms
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 60 }
                     })
                 }
             };
@@ -100,91 +89,30 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isIOS()) {
                 preview.setAttribute('playsinline', '');
                 preview.setAttribute('webkit-playsinline', '');
-                // Add iOS-specific attributes for better permission handling
-                preview.setAttribute('autoplay', '');
-                preview.setAttribute('muted', '');
-                preview.setAttribute('disablepictureinpicture', '');
             }
 
-            // Try to get media stream
-            stream = await navigator.mediaDevices.getUserMedia(constraints)
-                .catch(err => {
-                    if (isIOS()) {
-                        localStorage.removeItem('cameraPermissionGranted');
-                        throw err;
-                    }
-                    throw err;
-                });
-            
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
             preview.srcObject = stream;
             
-            // Wait for video to be ready with timeout
-            await Promise.race([
-                new Promise((resolve) => {
-                    preview.onloadedmetadata = resolve;
-                }),
-                new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Camera initialization timeout')), 5000);
-                })
-            ]);
+            // Wait for video to be ready
+            await new Promise((resolve) => {
+                preview.onloadedmetadata = resolve;
+            });
             
-            // iOS requires explicit play() call and may need user interaction
-            const playPromise = preview.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(err => {
-                    console.error('Play error:', err);
-                    if (isIOS()) {
-                        clientInfo.innerHTML = `
-                            <div class="alert alert-warning">
-                                <p>Для работы сканера нажмите на экран</p>
-                                <button class="btn btn-primary mt-2" onclick="document.getElementById('preview').play()">
-                                    Разрешить воспроизведение
-                                </button>
-                            </div>
-                        `;
-                    }
-                });
-            }
-
+            preview.play();
             scanning = true;
             startScannerBtn.textContent = 'Остановить сканирование';
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
-            let errorMessage = `Ошибка доступа к камере: ${err.message}`;
-            if (isIOS() && err.name === 'NotAllowedError') {
-                errorMessage = 'Доступ к камере запрещен. Пожалуйста, разрешите доступ в настройках Safari.';
-            }
             clientInfo.innerHTML = `
                 <div class="alert alert-danger">
-                    <p>${errorMessage}</p>
+                    <p>Ошибка доступа к камере: ${err.message}</p>
                     <p>Попробуйте обновить страницу и разрешить доступ к камере</p>
                 </div>
             `;
         }
     });
-
-    // Show iOS permission dialog
-    function showPermissionDialog() {
-        return new Promise((resolve) => {
-            clientInfo.innerHTML = `
-                <div class="alert alert-info">
-                    <h4>Доступ к камере</h4>
-                    <p>Для работы сканера QR-кодов необходимо разрешить доступ к камере.</p>
-                    <p>После нажатия "Разрешить" появится системный запрос разрешения.</p>
-                    <div class="mt-3">
-                        <button class="btn btn-primary me-2" onclick="closePermissionDialog(true)">Разрешить</button>
-                        <button class="btn btn-secondary" onclick="closePermissionDialog(false)">Отмена</button>
-                    </div>
-                </div>
-            `;
-            
-            window.closePermissionDialog = (result) => {
-                delete window.closePermissionDialog;
-                resolve(result);
-            };
-        });
-    }
 
     function stopScanner() {
         if (stream) {
@@ -201,30 +129,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function scanFrame() {
         if (!scanning) return;
 
-        try {
-            if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
-                const canvas = document.createElement('canvas');
-                // Scale down for better performance on mobile
-                const scale = isIOS() ? 1 : 0.7;
-                canvas.width = preview.videoWidth * scale;
-                canvas.height = preview.videoHeight * scale;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, canvas.height, {
-                    inversionAttempts: 'dontInvert',
-                    canOverwriteImage: false
-                });
+        if (preview.readyState === preview.HAVE_ENOUGH_DATA) {
+            const canvas = document.createElement('canvas');
+            canvas.width = preview.videoWidth;
+            canvas.height = preview.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-                if (code) {
-                    console.log('QR detected:', code.data);
-                    checkClient(code.data);
-                    stopScanner();
-                    return;
-                }
+            if (code) {
+                checkClient(code.data);
+                stopScanner();
             }
-        } catch (err) {
-            console.error('Scan error:', err);
         }
 
         animationFrame = requestAnimationFrame(scanFrame);
