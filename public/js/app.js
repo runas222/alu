@@ -120,8 +120,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 let totalPrice = 0;
                 let totalProfit = 0;
                 
-                // Сортируем товары по цене (от большего к меньшему)
-                const sortedProducts = [...data.products].sort((a, b) => b.price - a.price);
+                // Сортируем товары по дате (новые сверху)
+                const sortedProducts = [...data.products].sort((a, b) => 
+                    new Date(b.created_at) - new Date(a.created_at)
+                );
                 
                 const productsHtml = sortedProducts.map(product => {
                     totalPrice += product.price;
