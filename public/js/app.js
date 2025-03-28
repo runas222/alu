@@ -67,6 +67,16 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Check and handle iOS permissions
+        if (isIOS()) {
+            const hasPermission = localStorage.getItem('cameraPermissionGranted');
+            if (!hasPermission) {
+                const permissionResult = await showPermissionDialog();
+                if (!permissionResult) return;
+                localStorage.setItem('cameraPermissionGranted', 'true');
+            }
+        }
+
         try {
             const constraints = {
                 video: {
@@ -90,30 +100,91 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isIOS()) {
                 preview.setAttribute('playsinline', '');
                 preview.setAttribute('webkit-playsinline', '');
+                // Add iOS-specific attributes for better permission handling
+                preview.setAttribute('autoplay', '');
+                preview.setAttribute('muted', '');
+                preview.setAttribute('disablepictureinpicture', '');
             }
 
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            // Try to get media stream
+            stream = await navigator.mediaDevices.getUserMedia(constraints)
+                .catch(err => {
+                    if (isIOS()) {
+                        localStorage.removeItem('cameraPermissionGranted');
+                        throw err;
+                    }
+                    throw err;
+                });
+            
             preview.srcObject = stream;
             
-            // Wait for video to be ready
-            await new Promise((resolve) => {
-                preview.onloadedmetadata = resolve;
-            });
+            // Wait for video to be ready with timeout
+            await Promise.race([
+                new Promise((resolve) => {
+                    preview.onloadedmetadata = resolve;
+                }),
+                new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Camera initialization timeout')), 5000);
+                })
+            ]);
             
-            preview.play();
+            // iOS requires explicit play() call and may need user interaction
+            const playPromise = preview.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    console.error('Play error:', err);
+                    if (isIOS()) {
+                        clientInfo.innerHTML = `
+                            <div class="alert alert-warning">
+                                <p>Для работы сканера нажмите на экран</p>
+                                <button class="btn btn-primary mt-2" onclick="document.getElementById('preview').play()">
+                                    Разрешить воспроизведение
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
             scanning = true;
             startScannerBtn.textContent = 'Остановить сканирование';
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
+            let errorMessage = `Ошибка доступа к камере: ${err.message}`;
+            if (isIOS() && err.name === 'NotAllowedError') {
+                errorMessage = 'Доступ к камере запрещен. Пожалуйста, разрешите доступ в настройках Safari.';
+            }
             clientInfo.innerHTML = `
                 <div class="alert alert-danger">
-                    <p>Ошибка доступа к камере: ${err.message}</p>
+                    <p>${errorMessage}</p>
                     <p>Попробуйте обновить страницу и разрешить доступ к камере</p>
                 </div>
             `;
         }
     });
+
+    // Show iOS permission dialog
+    function showPermissionDialog() {
+        return new Promise((resolve) => {
+            clientInfo.innerHTML = `
+                <div class="alert alert-info">
+                    <h4>Доступ к камере</h4>
+                    <p>Для работы сканера QR-кодов необходимо разрешить доступ к камере.</p>
+                    <p>После нажатия "Разрешить" появится системный запрос разрешения.</p>
+                    <div class="mt-3">
+                        <button class="btn btn-primary me-2" onclick="closePermissionDialog(true)">Разрешить</button>
+                        <button class="btn btn-secondary" onclick="closePermissionDialog(false)">Отмена</button>
+                    </div>
+                </div>
+            `;
+            
+            window.closePermissionDialog = (result) => {
+                delete window.closePermissionDialog;
+                resolve(result);
+            };
+        });
+    }
 
     function stopScanner() {
         if (stream) {
