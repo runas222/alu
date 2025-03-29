@@ -94,9 +94,10 @@ document.addEventListener('DOMContentLoaded', function() {
             preview.play();
             scanning = true;
             startScannerBtn.textContent = 'Остановить сканирование';
-            // Hide loader and show video
+            // Hide loader and show video + frame
             scannerLoader.style.display = 'none';
             preview.style.display = 'block';
+            document.getElementById('scanner-frame').style.display = 'block';
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
@@ -122,6 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scanning = false;
         startScannerBtn.textContent = 'Начать сканирование';
         preview.srcObject = null;
+        document.getElementById('scanner-frame').style.display = 'none';
     }
 
     function scanFrame() {
