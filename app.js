@@ -28,7 +28,7 @@ db.serialize(() => {
     `);
     
     db.run(`
-        CREATE TABLE IF NOT EXISTS products (
+            CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER,
             name TEXT,
@@ -64,7 +64,7 @@ app.get('/', (req, res) => {
 app.post('/add-client', async (req, res) => {
     const { name, product, shop, price } = req.body;
     
-    if (!name || !product || !price) {
+    if (!name || !product || !shop || !price) {
         return res.status(400).json({ error: 'Все поля обязательны' });
     }
 
@@ -220,7 +220,7 @@ app.get('/clients', (req, res) => {
 
             clients.forEach(client => {
                 db.all(
-                    'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                    'SELECT id, name, price, profit, shop, created_at FROM products WHERE client_id = ?',
                     [client.id],
                     (err, products) => {
                         if (err) {
