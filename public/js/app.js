@@ -17,9 +17,10 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         const name = clientNameInput.value.trim();
         const product = productInput.value.trim();
+        const shop = document.getElementById('shop').value.trim();
         const price = parseFloat(priceInput.value);
         
-        if (!name || !product || isNaN(price)) return;
+        if (!name || !product || !shop || isNaN(price)) return;
 
         try {
             const response = await fetch('/add-client', {
@@ -27,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name, product, price })
+                body: JSON.stringify({ name, product, shop, price })
             });
 
             const data = await response.json();
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <h4>Клиент добавлен!</h4>
                     <p>Имя: <strong>${name}</strong></p>
                     <p>Товар: <strong>${product}</strong></p>
+                    <p>Магазин: <strong>${shop}</strong></p>
                     <p>Стоимость: <strong>${price.toFixed(2)} ₽</strong></p>
                     <p>Код клиента: <strong>${data.code}</strong></p>
                     <p class="mt-2">Сохраните этот код или QR-код для идентификации клиента.</p>
