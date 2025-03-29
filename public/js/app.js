@@ -55,6 +55,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Инициализация сканера
+    const scannerLoader = document.getElementById('scanner-loader');
+    
     startScannerBtn.addEventListener('click', async function() {
         if (scanning) {
             stopScanner();
@@ -62,6 +64,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
+            // Show loader
+            scannerLoader.style.display = 'block';
+            preview.style.display = 'none';
+            
             // iOS Safari requires specific handling
             const constraints = {
                 video: {
@@ -88,9 +94,15 @@ document.addEventListener('DOMContentLoaded', function() {
             preview.play();
             scanning = true;
             startScannerBtn.textContent = 'Остановить сканирование';
+            // Hide loader and show video
+            scannerLoader.style.display = 'none';
+            preview.style.display = 'block';
             scanFrame();
         } catch (err) {
             console.error('Camera error:', err);
+            // Hide loader on error
+            scannerLoader.style.display = 'none';
+            preview.style.display = 'block';
             clientInfo.innerHTML = `
                 <div class="alert alert-danger">
                     <p>Ошибка доступа к камере: ${err.message}</p>
