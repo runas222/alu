@@ -174,13 +174,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="product-item mb-3 p-3 border rounded">
                             <h5 class="mb-2">${product.name}</h5>
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <p><span class="text-muted">Цена:</span> <strong>${product.price.toFixed(2)} ₽</strong></p>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <p><span class="text-muted">Заработок:</span> <strong>${product.profit.toFixed(2)} ₽</strong></p>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
+                                    <p><span class="text-muted">Магазин:</span> <strong>${product.shop || 'Не указан'}</strong></p>
+                                </div>
+                                <div class="col-md-3">
                                     <p><span class="text-muted">Дата:</span> <strong>${product.created_at ? formatDateForDisplay(product.created_at) : 'Не указана'}</strong></p>
                                 </div>
                             </div>
