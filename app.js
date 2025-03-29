@@ -34,6 +34,7 @@ db.serialize(() => {
             name TEXT,
             price REAL,
             profit REAL,
+            shop TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE CASCADE
         )
@@ -61,7 +62,7 @@ app.get('/', (req, res) => {
 
 // Маршрут для добавления клиента/товара
 app.post('/add-client', async (req, res) => {
-    const { name, product, price } = req.body;
+    const { name, product, shop, price } = req.body;
     
     if (!name || !product || !price) {
         return res.status(400).json({ error: 'Все поля обязательны' });
@@ -78,8 +79,8 @@ app.post('/add-client', async (req, res) => {
         if (client) {
             // Добавляем товар к существующему клиенту
             db.run(
-                'INSERT INTO products (client_id, name, price, profit) VALUES (?, ?, ?, ?)',
-                [client.id, product, price, profit],
+                'INSERT INTO products (client_id, name, price, profit, shop) VALUES (?, ?, ?, ?, ?)',
+                [client.id, product, price, profit, shop],
                 function(err) {
                     if (err) {
                         console.error('Ошибка при добавлении товара:', err);
@@ -110,8 +111,8 @@ app.post('/add-client', async (req, res) => {
                         
                         const clientId = this.lastID;
                         db.run(
-                            'INSERT INTO products (client_id, name, price, profit) VALUES (?, ?, ?, ?)',
-                            [clientId, product, price, profit],
+                            'INSERT INTO products (client_id, name, price, profit, shop) VALUES (?, ?, ?, ?, ?)',
+                            [clientId, product, price, profit, shop],
                             function(err) {
                                 if (err) {
                                     console.error('Ошибка при добавлении товара:', err);
@@ -168,7 +169,7 @@ app.get('/check-client/:code', (req, res) => {
 
             // Получаем все товары клиента
             db.all(
-                'SELECT id, name, price, profit, created_at FROM products WHERE client_id = ?',
+                'SELECT id, name, price, profit, shop, created_at FROM products WHERE client_id = ?',
                 [client.id],
                 (err, products) => {
                     if (err) {
